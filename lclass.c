@@ -988,9 +988,27 @@ int luaOC_instanceof(lua_State *L) {
     }
 }
 
+/*
+ * 参数：类名 类
+ */
+int luaOC_newClassWithSuper(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TSTRING);
+    lclass_obj *obj = fixcovert_lclass(L, 2);
+    if (obj == NULL)return luaL_error(L, "not a class or object");
+    lua_settop(L, 2);
+    lua_pushcfunction(L, luaOC_newClass);
+    lua_pushvalue(L, 1);
+    lua_call(L, 1, 1);//3
+    lua_pushcfunction(L, luaOC_setSuper);
+    lua_pushvalue(L, -2);
+    lua_pushvalue(L, 2);
+    lua_call(L, 2, 0);
+    return 1;
+}
 
 static const luaL_Reg classlib[] = {
         {"newClass",               luaOC_newClass},
+        {"newClassWithSuper",      luaOC_newClassWithSuper},
         {"setConstructor",         luaOC_setConstructor},
         {"setDeconstructor",       luaOC_setDeconstructor},
         {"setObjectDeconstructor", luaOC_setObjectDeconstructor},
