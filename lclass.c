@@ -281,12 +281,7 @@ static int luaOC_meta__call(lua_State *L) {
             lua_pop(L, 1);
             return 1;
         } else {
-            lua_pushvalue(L, -2);//obj
-            for (int a = 0; a < argc; a++) {
-                lua_pushvalue(L, a + 2);
-            }
-            lua_call(L, argc + 1, 0);
-            lua_getmetatable(L, -1);
+            lua_getmetatable(L, -2);
             lua_pushvalue(L, supertop);
             lua_rawseti(L, -2, LCLASS_SUPER);
             lua_pop(L, 1);
@@ -294,6 +289,11 @@ static int luaOC_meta__call(lua_State *L) {
             lua_pushvalue(L, -2);
             lua_rawseti(L, -2, LCLASS_CHILD);
             lua_pop(L, 1);
+            lua_pushvalue(L, -2);//obj
+            for (int a = 0; a < argc; a++) {
+                lua_pushvalue(L, a + 2);
+            }
+            lua_call(L, argc + 1, 0);
             return 1;
         }
     }
