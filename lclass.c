@@ -6,6 +6,7 @@
 #define lclass_c
 #define LUA_CORE
 
+#include <string.h>
 #include "lclass.h"
 #include "lprefix.h"
 #include "lua.h"
@@ -241,7 +242,7 @@ int luaOC_newPreObject(lua_State *L) {
     lclass_obj *obj = lua_newuserdata(L, sizeof(lclass_obj));
     lua_newtable(L);
     obj->meta = hvalue(s2v(L->top.p - 1));
-    obj->lockdefine = 0;
+    obj->lockdefine = 1;
     lua_pushvalue(L, 1), lua_rawseti(L, -2, LCLASS_OBJCLASS);
     lua_pushvalue(L, -2), lua_rawseti(L, -2, LCLASS_USERDATA);
     lua_pushboolean(L, 1), lua_rawseti(L, -2, LCLASS_ISOBJECT);
@@ -279,6 +280,32 @@ int luaOC_newPreObject(lua_State *L) {
     lua_getfield(L, 2, "__name"), lua_setfield(L, -2, "__name");
     lua_pushcfunction(L, retobjecttype), lua_setfield(L, -2, "__type");
     lua_setmetatable(L, -2);
+    int otop = lua_gettop(L);
+    lua_getmetatable(L, 1);//otop+1
+    lua_getmetatable(L, -2);//otop+2
+    lua_pushnil(L);
+    while (lua_next(L, otop + 1)) {
+        if (lua_type(L, -2) == LUA_TSTRING) {
+            lua_pushvalue(L, -2);
+            const char *name = lua_tostring(L, -1);
+            lua_pop(L, 1);
+            int pass = 0;
+            for (int i = 0; i < sizeof(MetaCustom_banlist) / sizeof(MetaCustom_banlist[0]); i++) {
+                if (strcmp(name, MetaCustom_banlist[i]) == 0) {
+                    pass = 1;
+                    break;
+                }
+            }
+            if (!pass) {
+                lua_pushvalue(L, -2);
+                lua_pushvalue(L, -2);
+                lua_rawset(L,otop+2);
+            }
+        }
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+    lua_settop(L, otop);
     return 1;
 }
 
@@ -705,7 +732,7 @@ int luaOC_getMethods(lua_State *L) {
             lua_rawgeti(L, -1, LCLASS_public);
             if (lua_istable(L, -1)) {
                 lua_pushnil(L);
-                while (lua_next(L, -2) != 0) {
+                while (lua_next(L, -2)) {
                     lua_pushvalue(L, -2);
                     lua_pushvalue(L, -2);
                     lua_rawset(L, 2);
@@ -738,7 +765,7 @@ int luaOC_getFields(lua_State *L) {
             lua_rawgeti(L, -1, LCLASS_public);
             if (lua_istable(L, -1)) {
                 lua_pushnil(L);
-                while (lua_next(L, -2) != 0) {
+                while (lua_next(L, -2)) {
                     lua_pushvalue(L, -2);
                     lua_pushvalue(L, -2);
                     lua_rawset(L, 2);
@@ -777,7 +804,7 @@ int luaOC_getDeclaredMethods(lua_State *L) {
                 lua_rawgeti(L, -1, acks[j]);
                 if (lua_istable(L, -1)) {
                     lua_pushnil(L);
-                    while (lua_next(L, -2) != 0) {
+                    while (lua_next(L, -2)) {
                         lua_pushvalue(L, -2);
                         lua_pushvalue(L, -2);
                         lua_rawset(L, 2);
@@ -817,7 +844,7 @@ int luaOC_getDeclaredFields(lua_State *L) {
                 lua_rawgeti(L, -1, acks[j]);
                 if (lua_istable(L, -1)) {
                     lua_pushnil(L);
-                    while (lua_next(L, -2) != 0) {
+                    while (lua_next(L, -2)) {
                         lua_pushvalue(L, -2);
                         lua_pushvalue(L, -2);
                         lua_rawset(L, 2);
