@@ -13,7 +13,7 @@
 #include "lauxlib.h"
 
 static lclass_obj *fixcovert_lclass(lua_State *L, int idx) {
-    luaL_checktype(L, 1, LUA_TUSERDATA);
+    luaL_checktype(L, idx, LUA_TUSERDATA);
     return lua_touserdata(L, idx);
 }
 
