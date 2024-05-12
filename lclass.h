@@ -42,6 +42,8 @@ LUAMOD_API int luaopen_lclass(lua_State *L);
 
 LUAI_FUNC int luaOC_newPreObject(lua_State *L);
 
+LUAI_FUNC int luaOC_newClassWithSuper(lua_State *L);
+
 LUAI_FUNC int luaOC_newClass(lua_State *L);
 
 LUAI_FUNC int luaOC_setConstructor(lua_State *L);
