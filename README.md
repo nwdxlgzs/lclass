@@ -9,6 +9,7 @@ Advanced Lua object-oriented system framework
 |     function/field     |                          parameters                          |                                info                                |
 | :--------------------: | :----------------------------------------------------------: | :----------------------------------------------------------------: |
 |        newClass        |                        类名（string）                        |                             定义一个类                             |
+|   newClassWithSuper    |                类名（string）,类（luaclass）                 |                 定义一个类顺便调用setSuper设置父类                 |
 |     setConstructor     |             类（luaclass）,构建函数（function）              |                 定义这个类的构建函数，只有一次机会                 |
 |    setDeconstructor    |      类/对象（luaclass/luaobject）,析构函数（function）      | 如果是类定义类的析构函数，如果是对象定义对象析构函数，只有一次机会 |
 | setObjectDeconstructor |            对象（luaobject）,析构函数（function）            |                   定义对象析构函数，只有一次机会                   |
