@@ -200,6 +200,36 @@ static int retobjecttype(lua_State *L) {
     return 1;
 }
 
+static int clone_aux(lua_State *L, int idx) {
+    luaL_checktype(L, idx, LUA_TTABLE);
+    lua_rawget(L, 1);
+    if (lua_type(L, -1) != LUA_TNIL) {
+        lua_remove(L, idx);
+        return 1;
+    }
+    lua_newtable(L);
+    lua_pushnil(L);  /* first key */
+    while (lua_next(L, idx)) {
+        if (lua_type(L, idx + 3) == LUA_TTABLE)
+            clone_aux(L, idx + 3);
+        lua_pushvalue(L, idx + 2);
+        lua_insert(L, idx + 2);
+        lua_rawset(L, idx + 1);
+    }
+    lua_remove(L, idx);
+    return 1;
+}
+
+static int clonefields(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_settop(L, 1);
+    lua_newtable(L);
+    lua_insert(L, 1);
+    clone_aux(L, 2);
+    lua_remove(L, 1);
+    return 1;
+}
+
 /*
  * 参数：类
  */
@@ -217,7 +247,29 @@ int luaOC_newPreObject(lua_State *L) {
     lua_pushboolean(L, 1), lua_rawseti(L, -2, LCLASS_ISOBJECT);
     lua_rawgeti(L, 2, LCLASS_METHODS), lua_rawseti(L, -2, LCLASS_METHODS);
     lua_rawgeti(L, 2, LCLASS_STATIC_METHODS), lua_rawseti(L, -2, LCLASS_STATIC_METHODS);
-    initMF(L, LCLASS_FIELDS);
+    {//实例化需要单独拷贝
+        lua_newtable(L);
+        int fieldtop = lua_gettop(L);
+        lua_rawgeti(L, 2, LCLASS_FIELDS);
+        lua_pushcfunction(L, clonefields);
+        lua_rawgeti(L, -2, LCLASS_public);
+        if (!lua_istable(L, -1)) {
+            return luaL_error(L, "class not define public fields");
+        }
+        lua_call(L, 1, 1);
+        lua_rawseti(L, fieldtop, LCLASS_public);
+        lua_settop(L, fieldtop);
+        lua_rawgeti(L, 2, LCLASS_FIELDS);
+        lua_pushcfunction(L, clonefields);
+        lua_rawgeti(L, -2, LCLASS_private);
+        if (!lua_istable(L, -1)) {
+            return luaL_error(L, "class not define private fields");
+        }
+        lua_call(L, 1, 1);
+        lua_rawseti(L, fieldtop, LCLASS_private);
+        lua_settop(L, fieldtop);
+        lua_rawseti(L, -2, LCLASS_FIELDS);
+    }
     lua_rawgeti(L, 2, LCLASS_STATIC_FIELDS), lua_rawseti(L, -2, LCLASS_STATIC_FIELDS);
     lua_rawgeti(L, 2, LCLASS_DEFS), lua_rawseti(L, -2, LCLASS_DEFS);
     lua_rawgeti(L, 2, LCLASS_DEL), lua_rawseti(L, -2, LCLASS_DEL);
