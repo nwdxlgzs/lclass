@@ -9,6 +9,9 @@
 
 #include "lobject.h"
 
+static const char *MetaCustom_banlist[] = {
+        "__call", "__index", "__newindex", "__name", "__type", "__gc",
+};
 typedef enum LClass_Index {
     LCLASS_USERDATA = 1,//这样全程LClass_Index都在array，为了免Table的API
     LCLASS_ISOBJECT,
