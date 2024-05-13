@@ -43,6 +43,7 @@ lclass.setConstructor(生物,function(self,名字)
   self.名字=名字
   self.生物实例总数=self.生物实例总数+1
 end)
+lclass.lockdefine(生物)
 local 动物 = lclass.newClassWithSuper("动物",生物)
 lclass.setField(动物,lclass.public,"叫声",nil)
 lclass.setConstructor(动物,function(self,名字)
@@ -53,6 +54,7 @@ lclass.setMethod(动物,lclass.public,"bark",function(self)
   if _==nil then _="还没设置叫声" end
   print(tostring(self.名字).."："..tostring(_))
 end)
+lclass.lockdefine(动物)
 local 猫 = lclass.newClass("猫")
 lclass.setSuper(猫,动物)
 lclass.setConstructor(猫,function(self,名字)
@@ -68,6 +70,7 @@ end
 getmetatable(猫).__tostring=function(self)
   return tostring(self.名字).."猫"
 end
+lclass.lockdefine(猫)
 狗 = lclass.newClassWithSuper("狗",动物)
 lclass.setConstructor(狗,function(self,名字)
   self.叫声="汪汪汪"
@@ -75,6 +78,7 @@ end)
 getmetatable(狗).__tostring=function(self)
   return tostring(self.名字).."狗"
 end
+lclass.lockdefine(狗)
 dog1=狗("柯基")
 dog1:bark()
 dog2=狗("德牧")
