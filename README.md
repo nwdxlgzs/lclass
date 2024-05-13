@@ -166,3 +166,178 @@ print(生物.生物实例总数)
 print(dog1)
 a=cast<猫> dog1--报错
 ```
+
+## 解释器指令细节
+```c
+vmcase(OP_NEWCLASS)
+{/* R(A)=class R(A) B? extends X */
+    StkId ra = RA(i);
+    int hassuper = GETARG_B(i);
+    setobjs2s(L, ra + 2, ra + 1);
+    setobjs2s(L, ra + 1, ra);
+    setfvalue(s2v(ra), hassuper ? luaOC_newClassWithSuper : luaOC_newClass);
+    if (hassuper) {
+        L->top.p = ra + 1 + 2;
+    } else {
+        L->top.p = ra + 1 + 1;
+    }
+    CallInfo *newci;
+    savepc(L);
+    if ((newci = luaD_precall(L, ra, 1)) == NULL)
+        updatetrap(ci);  /* C call; nothing else to be done */
+    else {  /* Lua call: run function in this same C frame */
+        ci = newci;
+        goto startfunc;
+    }
+    vmbreak;
+}
+vmcase(OP_SETCLASSFIELD)
+{/* R(A) B?static C?public R(A):field[R(A+2)]=R(A+3) */
+    StkId ra = RA(i);
+    int is_static = GETARG_B(i);
+    int is_public = GETARG_C(i);
+    setivalue(s2v(ra + 1), is_public ? LCLASS_public : LCLASS_private);
+    setfvalue(s2v(ra - 1), is_static ? luaOC_setStaticField : luaOC_setField);//编译时预留了空位
+    L->top.p = ra + 4;
+    CallInfo *newci;
+    savepc(L);
+    if ((newci = luaD_precall(L, ra - 1, 0)) == NULL)
+        updatetrap(ci);  /* C call; nothing else to be done */
+    else {  /* Lua call: run function in this same C frame */
+        ci = newci;
+        goto startfunc;
+    }
+    vmbreak;
+}
+vmcase(OP_SETCLASSMETHOD)
+{/* R(A) B?static C?public R(A):method[R(A+2)]=R(A+3) */
+    StkId ra = RA(i);
+    int is_static = GETARG_B(i);
+    int is_public = GETARG_C(i);
+    setivalue(s2v(ra + 1), is_public ? LCLASS_public : LCLASS_private);
+    setfvalue(s2v(ra - 1),
+              is_static ? luaOC_setStaticMethod : luaOC_setMethod);//编译时预留了空位
+    L->top.p = ra + 4;
+    CallInfo *newci;
+    savepc(L);
+    if ((newci = luaD_precall(L, ra - 1, 0)) == NULL)
+        updatetrap(ci);  /* C call; nothing else to be done */
+    else {  /* Lua call: run function in this same C frame */
+        ci = newci;
+        goto startfunc;
+    }
+    vmbreak;
+}
+vmcase(OP_METHODINITSUPER)
+{/* R(A) = super R(B) */
+    StkId ra = RA(i);
+    setobjs2s(L, ra + 1, RB(i));;
+    setfvalue(s2v(ra), luaOC_getSuper);
+    L->top.p = ra + 1 + 1;
+    CallInfo *newci;
+    savepc(L);
+    if ((newci = luaD_precall(L, ra, 1)) == NULL)
+        updatetrap(ci);  /* C call; nothing else to be done */
+    else {  /* Lua call: run function in this same C frame */
+        ci = newci;
+        goto startfunc;
+    }
+    vmbreak;
+}
+vmcase(OP_CLASSCONDECOFINA)
+{
+    //0：__init__ 1：__del__ 2：__finalize__
+    StkId ra = RA(i);
+    int b = GETARG_B(i);
+    lua_CFunction f = NULL;
+    switch (b) {
+        case 0: {
+            f = luaOC_setConstructor;
+            break;
+        }
+        case 1: {
+            f = luaOC_setObjectDeconstructor;
+            break;
+        }
+        case 2: {
+            f = luaOC_setDeconstructor;
+            break;
+        }
+    }
+    if (f) {
+        setfvalue(s2v(ra - 1), f);
+        setobjs2s(L, ra + 1, ra + 3);
+        L->top.p = ra + 2;
+        CallInfo *newci;
+        savepc(L);
+        if ((newci = luaD_precall(L, ra - 1, 0)) == NULL)
+            updatetrap(ci);  /* C call; nothing else to be done */
+        else {  /* Lua call: run function in this same C frame */
+            ci = newci;
+            goto startfunc;
+        }
+    }
+    vmbreak;
+}
+vmcase(OP_GETMETATABLE)
+{/* R(A)=getmetatable(R(A)) */
+    StkId ra = RA(i);
+    setobjs2s(L, ra + 1, ra);
+    setfvalue(s2v(ra), luaV_getmetatable);
+    L->top.p = ra + 1 + 1;
+    CallInfo *newci;
+    savepc(L);
+    if ((newci = luaD_precall(L, ra, 1)) == NULL)
+        updatetrap(ci);  /* C call; nothing else to be done */
+    else {  /* Lua call: run function in this same C frame */
+        ci = newci;
+        goto startfunc;
+    }
+    vmbreak;
+}
+vmcase(OP_LOCKCLASSDEF)
+{/* R(A):lock */
+    StkId ra = RA(i);
+    if (ttype(s2v(ra)) == LUA_TUSERDATA) {
+        Udata *U = uvalue(s2v(ra));
+        lclass_obj *obj = (lclass_obj *) getudatamem(U);
+        if (obj->meta == U->metatable && sizeof(lclass_obj) == U->len)
+            obj->lockdefine = 1;
+    }
+    vmbreak;
+}
+vmcase(OP_OBJECTCAST)
+{/* R(A):cast<R(B)> R(A) */
+    StkId ra = RA(i);
+    setobjs2s(L, ra + 2, RB(i));
+    setobjs2s(L, ra + 1, ra);
+    setfvalue(s2v(ra), luaOC_cast);
+    L->top.p = ra + 1 + 2;
+    CallInfo *newci;
+    savepc(L);
+    if ((newci = luaD_precall(L, ra, 1)) == NULL)
+        updatetrap(ci);  /* C call; nothing else to be done */
+    else {  /* Lua call: run function in this same C frame */
+        ci = newci;
+        goto startfunc;
+    }
+    vmbreak;
+}
+vmcase(OP_INSTANCEOF)
+{
+    StkId ra = RA(i);
+    setobjs2s(L, ra + 2, RC(i));
+    setobjs2s(L, ra + 1, RB(i));
+    setfvalue(s2v(ra), luaOC_instanceof);
+    L->top.p = ra + 1 + 2;
+    CallInfo *newci;
+    savepc(L);
+    if ((newci = luaD_precall(L, ra, 1)) == NULL)
+        updatetrap(ci);  /* C call; nothing else to be done */
+    else {  /* Lua call: run function in this same C frame */
+        ci = newci;
+        goto startfunc;
+    }
+    vmbreak;
+}
+```
