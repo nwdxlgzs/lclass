@@ -31,3 +31,66 @@ Advanced Lua object-oriented system framework
 |        private         |                              -                               |         可见性修饰，不影响使用，影响后续基于此值设计的函数         |
 
 如果你的Lua为魔改版本，可以精确操控CallInfo、编译时准确携带额外上值信息，public和private属性也可以模拟出来（上一CallInfo的func上值包含当前类时判定为类内，允许使用private），不过这很麻烦。
+
+## 下面是我使用此库魔改Lua实现的面向对象
+
+```lua
+--律动lua-1.0.20以后支持本语法
+local class 生物{
+  @static public 生物实例总数=0;
+  public 名字;
+  public __init__(名字){
+    self.名字=名字;
+    self.生物实例总数=self.生物实例总数+1
+  }
+}
+local class 动物 extends 生物{
+  public 叫声;
+  public __init__(名字){
+    print(@f"构建{名字}中")
+  }
+  public bark(){
+    print(@f"{self.名字}：{self.叫声??\"还没设置叫声\"}")
+  }
+}
+local class 猫 extends 动物{
+  public __init__(名字){
+    self.叫声="喵喵喵"
+  }
+  @meta public __mul(self,other){
+    if other instanceof 猫 then
+      return 猫(@f"{self.名字}*{other.名字}")
+     else
+      return nil
+    end
+  }
+  @meta public __tostring(self){
+    return @f"{self.名字}猫"
+  }
+}
+class 狗 extends 动物{
+  public __init__(名字){
+    super.叫声="汪汪汪"
+  }
+  @meta public __tostring(self){
+    return @f"{self.名字}狗"
+  }
+}
+dog1=狗("柯基")
+dog1:bark()
+dog2=狗("德牧")
+dog2:bark()
+cat1=猫("加菲")
+cat1:bark()
+cat2=猫("暹罗")
+cat2:bark()
+print(生物.生物实例总数)
+cat3=cat1*cat2
+print(cat3)
+print(生物.生物实例总数)
+cat4=(cat1*dog1)??"杂交失败"
+print(cat4)
+print(生物.生物实例总数)
+print(dog1)
+a=cast<猫>dog1
+```
