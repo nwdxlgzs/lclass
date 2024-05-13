@@ -92,7 +92,6 @@ print(生物.生物实例总数)
 cat4=(cat1*dog1)??"杂交失败"
 print(cat4)
 print(生物.生物实例总数)
-a=cast<猫> dog1--报错
 print(dog1)
-a=cast<猫>dog1
+a=cast<猫> dog1--报错
 ```
