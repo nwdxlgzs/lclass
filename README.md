@@ -341,3 +341,195 @@ vmcase(OP_INSTANCEOF)
     vmbreak;
 }
 ```
+## 编译器细节（仅限class定义）
+```c
+
+static void classstat(LexState *ls, int onlocal) {
+    FuncState *fs = ls->fs;
+    int line = ls->linenumber;
+    luaX_next(ls);//skip 'class'
+    int annotation_ENV = luaS_cstrequal(ls->t.annotation, "ENV");
+    TString *classnameS = str_checkname(ls);
+    int localvidx = -1;
+    if (onlocal) {
+        localvidx = new_localvar(ls, classnameS);
+        adjustlocalvars(ls, 1);
+    }
+    int classvidx = new_localvarliteral(ls, "(class state)")
+    adjustlocalvars(ls, 1);
+    expdesc classname = {0};
+    codestring(ls, 0, &classname, classnameS);
+    expdesc superclass = {0};
+    init_exp(&superclass, VNIL, 0);
+    if (testnext(ls, TK_EXTENDS)) {//继承
+        singlevar(ls, &superclass);
+    }
+    luaK_exp2nextreg(fs, &classname);
+    if (superclass.k != VNIL) {
+        luaK_exp2nextreg(fs, &superclass);
+        luaK_codeABC(fs, OP_NEWCLASS, classname.u.info, 1, 0);
+    } else {
+        luaK_codeABC(fs, OP_NEWCLASS, classname.u.info, 0, 0);
+    }
+    int classnameinfo = classname.u.info;
+    expdesc cla = {0};
+    init_var(fs, &cla, classvidx);
+    if (classnameinfo != classvidx) {
+        luaK_storevar(fs, &cla, &classname);
+    }
+    init_var(fs, &cla, classvidx);
+    if (onlocal) {
+        if (classnameinfo != localvidx) {
+            expdesc lo = {0};
+            init_var(fs, &lo, localvidx);
+            luaK_setoneret(fs, &cla);
+            luaK_storevar(fs, &lo, &cla);
+        }
+    } else {
+        expdesc gl = {0};
+        codestring(ls, 0, &gl, classnameS);
+        singlevar_name(ls, &gl, classnameS, annotation_ENV);
+        luaK_setoneret(fs, &cla);
+        luaK_storevar(fs, &gl, &cla);
+    }
+    checknext(ls, '{');
+    int freereg = fs->freereg;
+    do {
+        fs->freereg = freereg;
+        if (ls->t.token == '}')break;
+        fs->freereg++;//留足空位
+        line = ls->linenumber;
+        int is_static = luaS_cstrequal(ls->t.annotation, "static");
+        int is_meta = luaS_cstrequal(ls->t.annotation, "meta");
+        int is_public = testnext(ls, TK_PUBLIC);
+        int is_private = 0;
+        if (!is_public) {
+            is_private = testnext(ls, TK_PRIVATE);
+            if (!is_private) {
+                luaX_syntaxerror(ls,
+                                 luaO_pushfstring(ls->L, "class field/method define expect %s/%s",
+                                                  luaX_token2str(ls, TK_PUBLIC),
+                                                  luaX_token2str(ls, TK_PRIVATE)));
+            }
+        }
+        TString *MF_name = str_checkname(ls);
+        expdesc MFkey = {0};
+        codestring(ls, 0, &MFkey, MF_name);
+        int is__init__ = luaS_cstrequal(MF_name, "__init__");
+        int is__del__ = luaS_cstrequal(MF_name, "__del__");
+        int is__finalize__ = luaS_cstrequal(MF_name, "__finalize__");
+        if (ls->t.token == ';' || ls->t.token == '=') {//字段定义
+            expdesc fieldval = {0};
+            if (ls->t.token == ';') {//字段定义，a; => a=nil;
+                init_exp(&fieldval, VNIL, 0);
+            } else {
+                checknext(ls, '=');
+                expr(ls, &fieldval);
+            }
+            luaK_reserveregs(fs, 1);//存放luaOC_set[Static]Field
+            expdesc clazz = {0};
+            init_exp(&clazz, VLOCAL, fs->freereg);
+            luaK_reserveregs(fs, 1);//clazz
+            init_var(fs, &cla, classvidx);
+            luaK_storevar(fs, &clazz, &cla);
+            luaK_reserveregs(fs, 1);//public/private
+            luaK_exp2nextreg(fs, &MFkey);
+            luaK_exp2nextreg(fs, &fieldval);
+            luaK_codeABC(fs, OP_SETCLASSFIELD, clazz.u.info, is_static, is_public);
+            checknext(ls, ';');
+        } else if (testnext(ls, '(')) {//方法定义
+            expdesc methodval = {0};
+            if (is_meta) {
+                //禁止：__call,__index,__newindex,__name,__type,__gc
+                for (int i = 0;
+                     i < sizeof(MetaCustom_banlist) / sizeof(MetaCustom_banlist[0]); i++) {
+                    if (luaS_cstrequal(MF_name, MetaCustom_banlist[i]))
+                        luaX_syntaxerror(ls, luaO_pushfstring(ls->L,
+                                                              "class not allow define %s meta method",
+                                                              MetaCustom_banlist[i]));
+                }
+                expdesc clazz = {0};
+                init_exp(&clazz, VLOCAL, fs->freereg);
+                luaK_reserveregs(fs, 1);//clazz
+                init_var(fs, &cla, classvidx);
+                luaK_storevar(fs, &clazz, &cla);
+                luaK_reserveregs(fs, 1);//clazz
+                luaK_exp2nextreg(fs, &clazz);
+                luaK_codeABC(fs, OP_GETMETATABLE, clazz.u.info, 0, 0);
+                expdesc key = {0};
+                codestring(ls, 0, &key, MF_name);
+                luaK_indexed(fs, &clazz, &key);
+                FuncState new_fs = {0};
+                BlockCnt bl;
+                new_fs.f = addprototype(ls);
+                new_fs.f->linedefined = line;
+                new_fs.independent = 0;
+                open_func(ls, &new_fs, &bl);
+                TokenNodeArgs args = {0};
+                parlist(ls, &args);
+                checknext(ls, ')');
+                checknext(ls, '{');
+                fixDefArgs(ls, &args);
+                statlist(ls);
+                new_fs.f->lastlinedefined = ls->linenumber;
+                codeclosure(ls, &methodval);
+                close_func(ls);
+                check_match(ls, '}', '{', line);
+                testnext(ls, ';');
+                luaK_storevar(fs, &clazz, &methodval);
+            } else {
+                luaK_reserveregs(fs, 1);//存放luaOC_set[Static]Method/set[De][Object]Constructor
+                expdesc clazz = {0};
+                init_exp(&clazz, VLOCAL, fs->freereg);
+                luaK_reserveregs(fs, 1);//clazz
+                init_var(fs, &cla, classvidx);
+                luaK_storevar(fs, &clazz, &cla);
+                luaK_reserveregs(fs, 1);//public/private
+                luaK_exp2nextreg(fs, &MFkey);
+                {
+                    FuncState new_fs = {0};
+                    BlockCnt bl;
+                    new_fs.f = addprototype(ls);
+                    new_fs.f->linedefined = line;
+                    new_fs.independent = 0;
+                    open_func(ls, &new_fs, &bl);
+                    int selfvidx = new_localvarliteral(ls, "self");
+                    adjustlocalvars(ls, 1);
+                    TokenNodeArgs args = {0};
+                    parlist(ls, &args);
+                    checknext(ls, ')');
+                    checknext(ls, '{');
+                    fixDefArgs(ls, &args);
+                    int supervidx = new_localvarliteral(ls, "super");
+                    adjustlocalvars(ls, 1);
+                    luaK_reserveregs(&new_fs, 1);
+                    luaK_codeABC(&new_fs, OP_METHODINITSUPER, supervidx, selfvidx, 0);
+                    statlist(ls);
+                    new_fs.f->lastlinedefined = ls->linenumber;
+                    codeclosure(ls, &methodval);
+                    close_func(ls);
+                }
+                if (is__init__) {
+                    luaK_codeABC(fs, OP_CLASSCONDECOFINA, clazz.u.info, 0, 0);
+                } else if (is__del__) {
+                    luaK_codeABC(fs, OP_CLASSCONDECOFINA, clazz.u.info, 1, 0);
+                } else if (is__finalize__) {
+                    luaK_codeABC(fs, OP_CLASSCONDECOFINA, clazz.u.info, 2, 0);
+                } else {
+                    luaK_codeABC(fs, OP_SETCLASSMETHOD, clazz.u.info, is_static, is_public);
+                }
+                check_match(ls, '}', '{', line);
+                testnext(ls, ';');
+            }
+        } else
+            luaX_syntaxerror(ls, "not a field/method define");
+    } while (1);
+    check_match(ls, '}', '{', line);
+    if (onlocal) {
+        luaK_codeABC(fs, OP_LOCKCLASSDEF, localvidx, 0, 0);
+    } else {
+        luaK_codeABC(fs, OP_LOCKCLASSDEF, classvidx, 0, 0);
+    }
+    removevars(fs, classvidx);
+}
+```
