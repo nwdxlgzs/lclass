@@ -83,4 +83,6 @@ LUAI_FUNC int luaOC_cast(lua_State *L);
 
 LUAI_FUNC int luaOC_instanceof(lua_State *L);
 
+LUAI_FUNC int luaOC_getClass(lua_State *L);
+
 #endif
