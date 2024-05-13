@@ -27,6 +27,7 @@ Advanced Lua object-oriented system framework
 |       lockdefine       |                类/对象（luaclass/luaobject）                 |              锁定定义，用于完成构建类或对象后锁定定义              |
 |          cast          |               对象（luaobject）,类（luaclass）               |             将当前对象转为目标类的对象（失败抛出错误）             |
 |       instanceof       |               对象（luaobject）,类（luaclass）               |           判断当前对象是否（或其父/子类）为目标类的对象            |
+|        getClass        |                类/对象（luaclass/luaobject）                 |                        拿到当前对象或类的类                        |
 |         public         |                              -                               |         可见性修饰，不影响使用，影响后续基于此值设计的函数         |
 |        private         |                              -                               |         可见性修饰，不影响使用，影响后续基于此值设计的函数         |
 
@@ -91,6 +92,7 @@ print(生物.生物实例总数)
 cat4=(cat1*dog1)??"杂交失败"
 print(cat4)
 print(生物.生物实例总数)
+a=cast<猫> dog1--报错
 print(dog1)
 a=cast<猫>dog1
 ```
