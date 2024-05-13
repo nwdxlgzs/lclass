@@ -33,6 +33,68 @@ Advanced Lua object-oriented system framework
 
 如果你的Lua为魔改版本，可以精确操控CallInfo、编译时准确携带额外上值信息，public和private属性也可以模拟出来（上一CallInfo的func上值包含当前类时判定为类内，允许使用private），不过这很麻烦。
 
+## 使用方法
+
+```lua
+local 生物 = lclass.newClass("生物")
+lclass.setStaticField(生物,lclass.public,"生物实例总数",0)
+lclass.setField(生物,lclass.public,"名字",nil)
+lclass.setsetConstructor(生物,function(self,名字)
+  self.名字=名字
+  self.生物实例总数=self.生物实例总数+1
+end)
+local 动物 = lclass.newClassWithSuper("动物",生物)
+lclass.setField(动物,lclass.public,"叫声",nil)
+lclass.setConstructor(动物,function(self,名字)
+  print("构建"..tostring(名字).."中")
+end)
+lclass.setMethod(动物,lclass.public,"bark",function(self)
+  local _=self.叫声
+  if _==nil then _="还没设置叫声" end
+  print(tostring(self.名字).."："..tostring(_))
+end)
+local 猫 = lclass.newClass("猫")
+lclass.setSuper(猫,动物)
+lclass.setConstructor(猫,function(self,名字)
+  self.叫声="喵喵喵"
+end)
+getmetatable(猫).__mul=function(self,other)
+  if lclass.instanceof(other,猫) then
+    return 猫(tostring(self.名字).."*"..tostring(other.名字))
+  else
+    return nil
+  end
+end
+getmetatable(猫).__tostring=function(self)
+  return tostring(self.名字).."猫"
+end
+狗 = lclass.newClassWithSuper("狗",动物)
+lclass.setConstructor(狗,function(self,名字)
+  self.叫声="汪汪汪"
+end)
+getmetatable(狗).__tostring=function(self)
+  return tostring(self.名字).."狗"
+end
+dog1=狗("柯基")
+dog1:bark()
+dog2=狗("德牧")
+dog2:bark()
+cat1=猫("加菲")
+cat1:bark()
+cat2=猫("暹罗")
+cat2:bark()
+print(生物.生物实例总数)
+cat3=cat1*cat2
+print(cat3)
+print(生物.生物实例总数)
+cat4=(cat1*dog1)
+if cat4==nil then cat4="杂交失败" end
+print(cat4)
+print(生物.生物实例总数)
+print(dog1)
+a=lclass.cast(dog1,猫)--报错
+```
+
 ## 下面是我使用此库魔改Lua实现的面向对象
 
 ```lua
