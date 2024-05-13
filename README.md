@@ -181,14 +181,9 @@ vmcase(OP_NEWCLASS)
     } else {
         L->top.p = ra + 1 + 1;
     }
-    CallInfo *newci;
     savepc(L);
-    if ((newci = luaD_precall(L, ra, 1)) == NULL)
-        updatetrap(ci);  /* C call; nothing else to be done */
-    else {  /* Lua call: run function in this same C frame */
-        ci = newci;
-        goto startfunc;
-    }
+    luaD_precall(L, ra, 1);
+    updatetrap(ci);
     vmbreak;
 }
 vmcase(OP_SETCLASSFIELD)
@@ -199,14 +194,9 @@ vmcase(OP_SETCLASSFIELD)
     setivalue(s2v(ra + 1), is_public ? LCLASS_public : LCLASS_private);
     setfvalue(s2v(ra - 1), is_static ? luaOC_setStaticField : luaOC_setField);//编译时预留了空位
     L->top.p = ra + 4;
-    CallInfo *newci;
     savepc(L);
-    if ((newci = luaD_precall(L, ra - 1, 0)) == NULL)
-        updatetrap(ci);  /* C call; nothing else to be done */
-    else {  /* Lua call: run function in this same C frame */
-        ci = newci;
-        goto startfunc;
-    }
+    luaD_precall(L, ra - 1, 0);
+    updatetrap(ci);
     vmbreak;
 }
 vmcase(OP_SETCLASSMETHOD)
@@ -218,14 +208,9 @@ vmcase(OP_SETCLASSMETHOD)
     setfvalue(s2v(ra - 1),
               is_static ? luaOC_setStaticMethod : luaOC_setMethod);//编译时预留了空位
     L->top.p = ra + 4;
-    CallInfo *newci;
     savepc(L);
-    if ((newci = luaD_precall(L, ra - 1, 0)) == NULL)
-        updatetrap(ci);  /* C call; nothing else to be done */
-    else {  /* Lua call: run function in this same C frame */
-        ci = newci;
-        goto startfunc;
-    }
+    luaD_precall(L, ra - 1, 0);
+    updatetrap(ci);
     vmbreak;
 }
 vmcase(OP_METHODINITSUPER)
@@ -234,14 +219,9 @@ vmcase(OP_METHODINITSUPER)
     setobjs2s(L, ra + 1, RB(i));;
     setfvalue(s2v(ra), luaOC_getSuper);
     L->top.p = ra + 1 + 1;
-    CallInfo *newci;
     savepc(L);
-    if ((newci = luaD_precall(L, ra, 1)) == NULL)
-        updatetrap(ci);  /* C call; nothing else to be done */
-    else {  /* Lua call: run function in this same C frame */
-        ci = newci;
-        goto startfunc;
-    }
+    luaD_precall(L, ra, 1);
+    updatetrap(ci);
     vmbreak;
 }
 vmcase(OP_CLASSCONDECOFINA)
@@ -268,14 +248,9 @@ vmcase(OP_CLASSCONDECOFINA)
         setfvalue(s2v(ra - 1), f);
         setobjs2s(L, ra + 1, ra + 3);
         L->top.p = ra + 2;
-        CallInfo *newci;
         savepc(L);
-        if ((newci = luaD_precall(L, ra - 1, 0)) == NULL)
-            updatetrap(ci);  /* C call; nothing else to be done */
-        else {  /* Lua call: run function in this same C frame */
-            ci = newci;
-            goto startfunc;
-        }
+        luaD_precall(L, ra-1, 0);
+        updatetrap(ci);
     }
     vmbreak;
 }
@@ -285,14 +260,9 @@ vmcase(OP_GETMETATABLE)
     setobjs2s(L, ra + 1, ra);
     setfvalue(s2v(ra), luaV_getmetatable);
     L->top.p = ra + 1 + 1;
-    CallInfo *newci;
     savepc(L);
-    if ((newci = luaD_precall(L, ra, 1)) == NULL)
-        updatetrap(ci);  /* C call; nothing else to be done */
-    else {  /* Lua call: run function in this same C frame */
-        ci = newci;
-        goto startfunc;
-    }
+    luaD_precall(L, ra, 1);
+    updatetrap(ci);
     vmbreak;
 }
 vmcase(OP_LOCKCLASSDEF)
@@ -313,14 +283,9 @@ vmcase(OP_OBJECTCAST)
     setobjs2s(L, ra + 1, ra);
     setfvalue(s2v(ra), luaOC_cast);
     L->top.p = ra + 1 + 2;
-    CallInfo *newci;
     savepc(L);
-    if ((newci = luaD_precall(L, ra, 1)) == NULL)
-        updatetrap(ci);  /* C call; nothing else to be done */
-    else {  /* Lua call: run function in this same C frame */
-        ci = newci;
-        goto startfunc;
-    }
+    luaD_precall(L, ra, 1);
+    updatetrap(ci);
     vmbreak;
 }
 vmcase(OP_INSTANCEOF)
@@ -330,14 +295,9 @@ vmcase(OP_INSTANCEOF)
     setobjs2s(L, ra + 1, RB(i));
     setfvalue(s2v(ra), luaOC_instanceof);
     L->top.p = ra + 1 + 2;
-    CallInfo *newci;
     savepc(L);
-    if ((newci = luaD_precall(L, ra, 1)) == NULL)
-        updatetrap(ci);  /* C call; nothing else to be done */
-    else {  /* Lua call: run function in this same C frame */
-        ci = newci;
-        goto startfunc;
-    }
+    luaD_precall(L, ra, 1);
+    updatetrap(ci);
     vmbreak;
 }
 ```
@@ -397,7 +357,7 @@ static void classstat(LexState *ls, int onlocal) {
     do {
         fs->freereg = freereg;
         if (ls->t.token == '}')break;
-        fs->freereg++;//留足空位
+        luaK_reserveregs(fs, 1);//留足空位
         line = ls->linenumber;
         int is_static = luaS_cstrequal(ls->t.annotation, "static");
         int is_meta = luaS_cstrequal(ls->t.annotation, "meta");
