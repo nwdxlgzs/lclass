@@ -104,6 +104,14 @@ static int oc_MFset(lua_State *L) {
 static int luaOC_meta__newindex(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    if (lua_type(L, 2) == LUA_TSTRING) {
+        lua_pushvalue(L, 2);
+        const char *k = lua_tostring(L, -1);
+        lua_pop(L, 1);
+        if (strcmp(k, "class") == 0) {
+            return luaL_error(L, "class field is proto data,just allow get");
+        }
+    }
     lua_pushcfunction(L, oc_MFset);
     lua_pushvalue(L, 1);
     lua_pushvalue(L, 2);
@@ -180,6 +188,17 @@ static int oc_MFget(lua_State *L) {
 static int luaOC_meta__index(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    if (lua_type(L, 2) == LUA_TSTRING) {
+        lua_pushvalue(L, 2);
+        const char *k = lua_tostring(L, -1);
+        lua_pop(L, 1);
+        if (strcmp(k, "class") == 0) {
+            lua_pushcfunction(L, luaOC_getClass);
+            lua_pushvalue(L, 1);
+            lua_call(L, 1, 1);
+            return 1;
+        }
+    }
     lua_pushcfunction(L, oc_MFget);
     lua_pushvalue(L, 1);
     lua_pushvalue(L, 2);
@@ -501,6 +520,14 @@ int luaOC_setStaticField(lua_State *L) {
     if (obj->lockdefine)return luaL_error(L, "locked class/object can't set static field");
     LCLASS_AccessKey accessK = luaL_checkinteger(L, 2);
     lua_settop(L, 4);
+    if (lua_type(L, 3) == LUA_TSTRING) {
+        lua_pushvalue(L, 3);
+        const char *k = lua_tostring(L, -1);
+        lua_pop(L, 1);
+        if (strcmp(k, "class") == 0) {
+            return luaL_error(L, "class field is proto data,just allow get");
+        }
+    }
     lua_getmetatable(L, 1);//5
     lua_rawgeti(L, -1, LCLASS_DEFS);
     if (!lua_istable(L, -1)) {
@@ -540,6 +567,14 @@ int luaOC_setField(lua_State *L) {
     if (obj->lockdefine)return luaL_error(L, "locked class/object can't set field");
     LCLASS_AccessKey accessK = luaL_checkinteger(L, 2);
     lua_settop(L, 4);
+    if (lua_type(L, 3) == LUA_TSTRING) {
+        lua_pushvalue(L, 3);
+        const char *k = lua_tostring(L, -1);
+        lua_pop(L, 1);
+        if (strcmp(k, "class") == 0) {
+            return luaL_error(L, "class field is proto data,just allow get");
+        }
+    }
     lua_getmetatable(L, 1);//5
     lua_rawgeti(L, -1, LCLASS_DEFS);
     if (!lua_istable(L, -1)) {
@@ -580,6 +615,14 @@ int luaOC_setStaticMethod(lua_State *L) {
     LCLASS_AccessKey accessK = luaL_checkinteger(L, 2);
     luaL_checktype(L, 4, LUA_TFUNCTION);
     lua_settop(L, 4);
+    if (lua_type(L, 3) == LUA_TSTRING) {
+        lua_pushvalue(L, 3);
+        const char *k = lua_tostring(L, -1);
+        lua_pop(L, 1);
+        if (strcmp(k, "class") == 0) {
+            return luaL_error(L, "class field is proto data,just allow get");
+        }
+    }
     lua_getmetatable(L, 1);//5
     lua_rawgeti(L, -1, LCLASS_DEFS);
     if (!lua_istable(L, -1)) {
@@ -620,6 +663,14 @@ int luaOC_setMethod(lua_State *L) {
     LCLASS_AccessKey accessK = luaL_checkinteger(L, 2);
     luaL_checktype(L, 4, LUA_TFUNCTION);
     lua_settop(L, 4);
+    if (lua_type(L, 3) == LUA_TSTRING) {
+        lua_pushvalue(L, 3);
+        const char *k = lua_tostring(L, -1);
+        lua_pop(L, 1);
+        if (strcmp(k, "class") == 0) {
+            return luaL_error(L, "class field is proto data,just allow get");
+        }
+    }
     lua_getmetatable(L, 1);//5
     lua_rawgeti(L, -1, LCLASS_DEFS);
     if (!lua_istable(L, -1)) {
