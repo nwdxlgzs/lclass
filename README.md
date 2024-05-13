@@ -39,7 +39,7 @@ Advanced Lua object-oriented system framework
 local 生物 = lclass.newClass("生物")
 lclass.setStaticField(生物,lclass.public,"生物实例总数",0)
 lclass.setField(生物,lclass.public,"名字",nil)
-lclass.setsetConstructor(生物,function(self,名字)
+lclass.setConstructor(生物,function(self,名字)
   self.名字=名字
   self.生物实例总数=self.生物实例总数+1
 end)
