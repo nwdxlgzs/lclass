@@ -299,7 +299,7 @@ int luaOC_newPreObject(lua_State *L) {
             if (!pass) {
                 lua_pushvalue(L, -2);
                 lua_pushvalue(L, -2);
-                lua_rawset(L,otop+2);
+                lua_rawset(L, otop + 2);
             }
         }
         lua_pop(L, 1);
@@ -707,6 +707,25 @@ int luaOC_lockdefine(lua_State *L) {
 /*
  * 参数：类/对象
  */
+int luaOC_getClass(lua_State *L) {
+    lclass_obj *obj = fixcovert_lclass(L, 1);
+    if (obj == NULL)return luaL_error(L, "not a class or object");
+    lua_settop(L, 1);
+    lua_getmetatable(L, 1);//2
+    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
+    int isobj = lua_toboolean(L, -1);
+    lua_pop(L, 1);
+    if (isobj) {
+        lua_rawgeti(L, -1, LCLASS_OBJCLASS);
+    } else {
+        lua_settop(L, 1);
+    }
+    return 1;
+}
+
+/*
+ * 参数：类/对象
+ */
 int luaOC_getSuper(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
@@ -1053,6 +1072,7 @@ static const luaL_Reg classlib[] = {
         {"lockdefine",             luaOC_lockdefine},
         {"cast",                   luaOC_cast},
         {"instanceof",             luaOC_instanceof},
+        {"getClass",               luaOC_getClass},
         {"public",  NULL},
         {"private", NULL},
         {NULL,      NULL}
