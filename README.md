@@ -33,7 +33,7 @@ Advanced Lua object-oriented system framework
 
 ## 开启私有实现
 
-编译参数携带`-DLCLASS_PRIVATE_IMPL`或代码开启`#define LCLASS_PRIVATE_IMPL 1`即可使用私有化检查
+编译参数携带`-DLCLASS_PRIVATE_IMPL`或代码开启`#define LCLASS_PRIVATE_IMPL 1`即可使用私有化检查，开启后请务必配套对应编译器和解释器，否则无法运行。
 
 ## 使用方法
 
