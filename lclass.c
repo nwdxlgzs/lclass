@@ -21,11 +21,9 @@ static lclass_obj *fixcovert_lclass(lua_State *L, int idx) {
 static int luaOC_meta__gc(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    int isobj = !obj->isclass;
     lua_settop(L, 1);
     lua_getmetatable(L, 1);//2
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    int isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
     lua_rawgeti(L, -1, isobj ? LCLASS_DEL : LCLASS_CLASSDEL);
     if (lua_isfunction(L, -1)) {
         lua_pushvalue(L, 1);
@@ -34,14 +32,49 @@ static int luaOC_meta__gc(lua_State *L) {
     return 0;
 }
 
+static int in_private(lua_State *L, lclass_obj *obj) {
+#ifndef LCLASS_PRIVATE_IMPL
+    int at_private = 1;
+#else
+    int at_private = 0;
+    CallInfo *ci = L->ci->previous->previous;
+    StkId func = ci->func.p;//上一个__index/__newindex，再上一个是调用
+    /*
+     * 没有严格约束，只要函数第一个位置
+     */
+    if (ttisclosure(s2v(func))) {
+        TValue *o = s2v(func + 1);
+        if (ttype(o) == LUA_TUSERDATA) {
+            Udata *U = uvalue(o);
+            if (sizeof(lclass_obj) == U->len) {
+                lclass_obj *p = (lclass_obj *) getudatamem(U);
+                if (p == obj || p == obj->objclass) {
+                    at_private = 1;
+                }
+            }
+        }
+        if (at_private && ttisLclosure(s2v(func))) {//Lua函数的话，你参数第一个一定是self(但是这是编译器负责的，所以我要检查你)
+            int numparams = getproto(s2v(func))->numparams;
+            at_private = numparams > 0;
+            if (at_private) {//super在numparams+1，numparams+2位置是self的light userdata
+                o = s2v(func + numparams + 2);
+                if (ttype(o) == LUA_TLIGHTUSERDATA) {
+                    at_private = obj == pvalue(o);
+                }
+            }
+        }
+    }
+#endif
+    return at_private;
+}
+
 static int oc_MFset(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    int isobj = !obj->isclass;
+    int at_private = in_private(L, obj);
     lua_settop(L, 3);
     lua_getmetatable(L, 1);//4
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    int isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
     lua_rawgeti(L, -1, LCLASS_DEFS);
     if (!lua_istable(L, -1)) {
         return luaL_error(L, "not found define table");
@@ -73,6 +106,9 @@ static int oc_MFset(lua_State *L) {
             lidx = LCLASS_FIELDS;
         } else {
             return luaL_error(L, "Bad define table, idx %d", idx);
+        }
+        if ((!at_private) && (idx & LCLASS_private)) {
+            return luaL_error(L, "private new index not allow (flags=%d)", idx);
         }
         if (((idx & LCLASS_public) || (idx & LCLASS_private)) &&
             ((idx & LCLASS_accessField) != LCLASS_accessField)) {
@@ -123,11 +159,10 @@ static int luaOC_meta__newindex(lua_State *L) {
 static int oc_MFget(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    int isobj = !obj->isclass;
+    int at_private = in_private(L, obj);
     lua_settop(L, 2);
     lua_getmetatable(L, 1);//3
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    int isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
     lua_rawgeti(L, -1, LCLASS_DEFS);
     if (!lua_istable(L, -1)) {
         return luaL_error(L, "not found define table");
@@ -158,6 +193,9 @@ static int oc_MFget(lua_State *L) {
             lidx = LCLASS_FIELDS;
         } else {
             return luaL_error(L, "Bad define table, idx %d", idx);
+        }
+        if ((!at_private) && (idx & LCLASS_private)) {
+            return luaL_error(L, "private index not allow (flags=%d)", idx);
         }
         if (((idx & LCLASS_public) || (idx & LCLASS_private)) &&
             ((idx & LCLASS_accessField) != LCLASS_accessField)) {
@@ -262,9 +300,10 @@ int luaOC_newPreObject(lua_State *L) {
     lua_newtable(L);
     obj->meta = hvalue(s2v(L->top.p - 1));
     obj->lockdefine = 1;
+    obj->isclass = 0;
+    obj->objclass = class;
     lua_pushvalue(L, 1), lua_rawseti(L, -2, LCLASS_OBJCLASS);
     lua_pushvalue(L, -2), lua_rawseti(L, -2, LCLASS_USERDATA);
-    lua_pushboolean(L, 1), lua_rawseti(L, -2, LCLASS_ISOBJECT);
     lua_rawgeti(L, 2, LCLASS_METHODS), lua_rawseti(L, -2, LCLASS_METHODS);
     lua_rawgeti(L, 2, LCLASS_STATIC_METHODS), lua_rawseti(L, -2, LCLASS_STATIC_METHODS);
     {//实例化需要单独拷贝
@@ -333,12 +372,10 @@ static int luaOC_meta__call(lua_State *L) {
     int argc = rawtop - 1;
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
-    lua_getmetatable(L, 1);//rawtop+1
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    if (lua_toboolean(L, -1)) {
+    if (!obj->isclass) {
         return luaL_error(L, "object can't use constructor");
     }
-    lua_pop(L, 1);
+    lua_getmetatable(L, 1);//rawtop+1
     lua_rawgeti(L, -1, LCLASS_SUPER);
     if (lua_isnil(L, -1)) {//直接构建
         lua_pop(L, 1);
@@ -412,8 +449,9 @@ int luaOC_newClass(lua_State *L) {
     lua_newtable(L);
     class->meta = hvalue(s2v(L->top.p - 1));
     class->lockdefine = 0;
+    class->isclass = 1;
+    class->objclass = class;
     lua_pushvalue(L, -2), lua_rawseti(L, -2, LCLASS_USERDATA);
-    lua_pushboolean(L, 0), lua_rawseti(L, -2, LCLASS_ISOBJECT);
     initMF(L, LCLASS_METHODS);
     initMF(L, LCLASS_STATIC_METHODS);
     initMF(L, LCLASS_FIELDS);
@@ -443,12 +481,10 @@ int luaOC_setConstructor(lua_State *L) {
     if (obj->lockdefine)return luaL_error(L, "locked class/object can't set constructor");
     luaL_checktype(L, 2, LUA_TFUNCTION);
     lua_getmetatable(L, 1);
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    if (lua_toboolean(L, -1)) {
+    if (!obj->isclass) {
         lua_getfield(L, -2, "__name");
         return luaL_error(L, "constructor never in object<%s>", luaL_optstring(L, -1, "unknown"));
     }
-    lua_pop(L, 1);
     lua_rawgeti(L, -1, LCLASS_INIT);
     if (lua_isnil(L, -1)) {
         lua_pushvalue(L, 2), lua_rawseti(L, -3, LCLASS_INIT);
@@ -468,11 +504,9 @@ int luaOC_setDeconstructor(lua_State *L) {
     if (obj == NULL)return luaL_error(L, "not a class or object");
     if (obj->lockdefine)return luaL_error(L, "locked class/object can't set deconstructor");
     luaL_checktype(L, 2, LUA_TFUNCTION);
+    int isobj = !obj->isclass;
     lua_settop(L, 2);
     lua_getmetatable(L, 1);
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    int isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
     lua_rawgeti(L, -1, isobj ? LCLASS_DEL : LCLASS_CLASSDEL);
     if (lua_isnil(L, -1)) {
         lua_pushvalue(L, 2), lua_rawseti(L, -3, isobj ? LCLASS_DEL : LCLASS_CLASSDEL);
@@ -500,9 +534,8 @@ int luaOC_setObjectDeconstructor(lua_State *L) {
     if (lua_isnil(L, -1)) {
         lua_pushvalue(L, 2), lua_rawseti(L, -3, LCLASS_DEL);
     } else {
-        lua_rawgeti(L, -2, LCLASS_ISOBJECT);
-        int isobj = lua_toboolean(L, -1);
-        lua_getfield(L, -3, "__name");
+        int isobj = !obj->isclass;
+        lua_getfield(L, -2, "__name");
         return luaL_error(L, "This %s<%s> %s already exists deconstructor(%s)",
                           isobj ? "object" : "class",
                           luaL_optstring(L, -1, "unknown"),
@@ -708,8 +741,10 @@ int luaOC_setSuper(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
     if (obj->lockdefine)return luaL_error(L, "locked class/object can't set super");
+    int setoc_isobj = !obj->isclass;
     obj = fixcovert_lclass(L, 2);
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    int superoc_isobj = !obj->isclass;
     lua_settop(L, 2);
     lua_getmetatable(L, 1);//3
     lua_rawgeti(L, 3, LCLASS_SUPER);
@@ -717,13 +752,7 @@ int luaOC_setSuper(lua_State *L) {
         return luaL_error(L, "super already exist");
     }
     lua_pop(L, 1);
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    int setoc_isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
     lua_getmetatable(L, 2);//4
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    int superoc_isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
     if (setoc_isobj) {
         lua_pushvalue(L, 2);
         lua_rawseti(L, 3, LCLASS_SUPER);
@@ -761,15 +790,11 @@ int luaOC_lockdefine(lua_State *L) {
 int luaOC_getClass(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
-    lua_settop(L, 1);
-    lua_getmetatable(L, 1);//2
-    lua_rawgeti(L, -1, LCLASS_ISOBJECT);
-    int isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-    if (isobj) {
-        lua_rawgeti(L, -1, LCLASS_OBJCLASS);
-    } else {
+    if (obj->isclass) {
         lua_settop(L, 1);
+    } else {
+        lua_getmetatable(L, 1);//2
+        lua_rawgeti(L, -1, LCLASS_OBJCLASS);
     }
     return 1;
 }
@@ -950,17 +975,13 @@ int luaOC_getChild(lua_State *L) {
 int luaOC_cast(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    int waitcast_isobj = !obj->isclass;
     obj = fixcovert_lclass(L, 2);//此时obj为目标类的USERDATA，比较它
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    int castto_isobj = !obj->isclass;
     lua_settop(L, 2);
     lua_getmetatable(L, 1);//3
     lua_getmetatable(L, 2);//4
-    lua_rawgeti(L, 3, LCLASS_ISOBJECT);
-    int waitcast_isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-    lua_rawgeti(L, 4, LCLASS_ISOBJECT);
-    int castto_isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
     if (waitcast_isobj && !castto_isobj) {
         //先看自己是不是就是
         lua_settop(L, 3);//只保留当前需要cast的对象元表
@@ -1023,17 +1044,13 @@ int luaOC_cast(lua_State *L) {
 int luaOC_instanceof(lua_State *L) {
     lclass_obj *obj = fixcovert_lclass(L, 1);
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    int waitcast_isobj = !obj->isclass;
     obj = fixcovert_lclass(L, 2);//此时obj为目标类的USERDATA，比较它
     if (obj == NULL)return luaL_error(L, "not a class or object");
+    int castto_isobj = !obj->isclass;
     lua_settop(L, 2);
     lua_getmetatable(L, 1);//3
     lua_getmetatable(L, 2);//4
-    lua_rawgeti(L, 3, LCLASS_ISOBJECT);
-    int waitcast_isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-    lua_rawgeti(L, 4, LCLASS_ISOBJECT);
-    int castto_isobj = lua_toboolean(L, -1);
-    lua_pop(L, 1);
     if (waitcast_isobj && !castto_isobj) {
         //先看自己是不是就是
         lua_settop(L, 3);//只保留当前需要cast的对象元表
@@ -1104,6 +1121,7 @@ int luaOC_newClassWithSuper(lua_State *L) {
 }
 
 static const luaL_Reg classlib[] = {
+#ifndef LCLASS_PRIVATE_IMPL
         {"newClass",               luaOC_newClass},
         {"newClassWithSuper",      luaOC_newClassWithSuper},
         {"setConstructor",         luaOC_setConstructor},
@@ -1114,13 +1132,14 @@ static const luaL_Reg classlib[] = {
         {"setStaticMethod",        luaOC_setStaticMethod},
         {"setMethod",              luaOC_setMethod},
         {"setSuper",               luaOC_setSuper},
+        {"lockdefine",             luaOC_lockdefine},
+#endif
         {"getSuper",               luaOC_getSuper},
         {"getChild",               luaOC_getChild},
         {"getMethods",             luaOC_getMethods},
         {"getFields",              luaOC_getFields},
         {"getDeclaredMethods",     luaOC_getDeclaredMethods},
         {"getDeclaredFields",      luaOC_getDeclaredFields},
-        {"lockdefine",             luaOC_lockdefine},
         {"cast",                   luaOC_cast},
         {"instanceof",             luaOC_instanceof},
         {"getClass",               luaOC_getClass},
