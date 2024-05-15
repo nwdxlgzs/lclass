@@ -31,7 +31,9 @@ Advanced Lua object-oriented system framework
 |         public         |                              -                               |         可见性修饰，不影响使用，影响后续基于此值设计的函数         |
 |        private         |                              -                               |         可见性修饰，不影响使用，影响后续基于此值设计的函数         |
 
-如果你的Lua为魔改版本，可以精确操控CallInfo、编译时准确携带额外上值信息，public和private属性也可以模拟出来（上一CallInfo的func上值包含当前类时判定为类内，允许使用private），不过这很麻烦。
+## 开启私有实现
+
+编译参数携带`-DLCLASS_PRIVATE_IMPL`或代码开启`#define LCLASS_PRIVATE_IMPL 1`即可使用私有化检查
 
 ## 使用方法
 
@@ -104,7 +106,7 @@ print(dog1)
 a=lclass.cast(dog1,猫)--报错
 ```
 
-## 下面是我使用此库魔改Lua实现的面向对象
+## 下面是我使用此库魔改Lua实现的面向对象（支持private）
 
 ```lua
 --律动lua-1.0.20以后支持本语法
@@ -214,14 +216,23 @@ vmcase(OP_SETCLASSMETHOD)
     vmbreak;
 }
 vmcase(OP_METHODINITSUPER)
-{/* R(A) = super R(B) */
+{/* R(A) = super R(B) && R(A+1)=light userdata R(B) */
     StkId ra = RA(i);
-    setobjs2s(L, ra + 1, RB(i));;
+    StkId rb = RB(i);
+    lclass_obj *obj = NULL;
+    if (ttype(s2v(rb)) == LUA_TUSERDATA) {
+        Udata *U = uvalue(s2v(rb));
+        lclass_obj *aobj = (lclass_obj *) getudatamem(U);
+        if (aobj->meta == U->metatable && sizeof(lclass_obj) == U->len)
+            obj = aobj;
+    }
+    setobjs2s(L, ra + 1, rb);
     setfvalue(s2v(ra), luaOC_getSuper);
     L->top.p = ra + 1 + 1;
     savepc(L);
     luaD_precall(L, ra, 1);
     updatetrap(ci);
+    setpvalue(s2v(ra + 1), obj);
     vmbreak;
 }
 vmcase(OP_CLASSCONDECOFINA)
@@ -303,7 +314,6 @@ vmcase(OP_INSTANCEOF)
 ```
 ## 编译器细节（仅限class定义）
 ```c
-
 static void classstat(LexState *ls, int onlocal) {
     FuncState *fs = ls->fs;
     int line = ls->linenumber;
@@ -453,8 +463,6 @@ static void classstat(LexState *ls, int onlocal) {
                     new_fs.f->linedefined = line;
                     new_fs.independent = 0;
                     open_func(ls, &new_fs, &bl);
-                    init_var(&new_fs, &cla, classvidx);
-                    newupvalue(&new_fs, classnameS, &cla);
                     int selfvidx = new_localvarliteral(ls, "self");
                     adjustlocalvars(ls, 1);
                     TokenNodeArgs args = {0};
@@ -465,6 +473,11 @@ static void classstat(LexState *ls, int onlocal) {
                     int supervidx = new_localvarliteral(ls, "super");
                     adjustlocalvars(ls, 1);
                     luaK_reserveregs(&new_fs, 1);
+                    {//这里存放lightuserdata保证不可能是Lua自己不小心达到private判断条件
+                        new_localvarliteral(ls, "(private self ptr)");
+                        adjustlocalvars(ls, 1);
+                        luaK_reserveregs(&new_fs, 1);
+                    }
                     luaK_codeABC(&new_fs, OP_METHODINITSUPER, supervidx, selfvidx, 0);
                     statlist(ls);
                     new_fs.f->lastlinedefined = ls->linenumber;
