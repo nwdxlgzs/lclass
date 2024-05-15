@@ -453,6 +453,8 @@ static void classstat(LexState *ls, int onlocal) {
                     new_fs.f->linedefined = line;
                     new_fs.independent = 0;
                     open_func(ls, &new_fs, &bl);
+                    init_var(&new_fs, &cla, classvidx);
+                    newupvalue(&new_fs, classnameS, &cla);
                     int selfvidx = new_localvarliteral(ls, "self");
                     adjustlocalvars(ls, 1);
                     TokenNodeArgs args = {0};
