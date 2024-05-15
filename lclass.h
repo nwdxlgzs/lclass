@@ -14,7 +14,6 @@ static const char *MetaCustom_banlist[] = {
 };
 typedef enum LClass_Index {
     LCLASS_USERDATA = 1,//这样全程LClass_Index都在array，为了免Table的API
-    LCLASS_ISOBJECT,
     LCLASS_METHODS,
     LCLASS_STATIC_METHODS,
     LCLASS_FIELDS,
@@ -37,7 +36,9 @@ typedef enum LCLASS_AccessKey {
 #define LCLASS_field 16
 typedef struct lclass_obj {
     Table *meta;//方便直接拿到元表信息
+    struct lclass_obj *objclass;//类/对象的类地址（因为还有元表问题这里只是辅助底层用）
     lu_byte lockdefine;//锁定后不可继续添加定义
+    lu_byte isclass;//存储信息判断是不是类
 } lclass_obj;
 #define LUA_LCLASSLIBNAME "lclass"
 
