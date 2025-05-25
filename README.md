@@ -1,3 +1,6 @@
+# 提示
+如果你想要非常健壮的Lua54的面向对象编程体验，请访问这个代码仓库[nwdxlgzs/objlua](https://github.com/nwdxlgzs/objlua)
+
 # lclass
 Advanced Lua object-oriented system framework
 
